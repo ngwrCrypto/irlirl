@@ -36,3 +36,29 @@ async def process_amount(message: Message, state: FSMContext):
 
     except ValueError:
         await message.answer("Будь ласка, введи коректне число (більше 0).")
+
+# Salary Handlers
+from aiogram.types import CallbackQuery
+from utils.states import SalaryState
+
+@router.callback_query(F.data == "add_salary")
+async def start_salary(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(SalaryState.amount)
+    await callback.message.answer("Введи суму зарплати в €:")
+    await callback.answer()
+
+@router.message(SalaryState.amount)
+async def process_salary(message: Message, state: FSMContext):
+    try:
+        amount = float(message.text.replace(',', '.'))
+        if amount < 0:
+            raise ValueError("Negative amount")
+
+        today = date.today().isoformat()
+        await db.add_salary(today, amount)
+
+        await message.answer(f"🤑 Зарплата {amount}€ записана! Гуляємо! 🎉", reply_markup=main_menu())
+        await state.clear()
+
+    except ValueError:
+        await message.answer("Будь ласка, введи коректне число.")

@@ -86,4 +86,24 @@ class DatabaseManager:
             "mileage": mileage
         }
 
+    async def get_last_data(self):
+        async with aiosqlite.connect(self.db_path) as db:
+            # Last Mood
+            async with db.execute("SELECT date, value FROM mood ORDER BY date DESC LIMIT 1") as cursor:
+                mood = await cursor.fetchone()
+
+            # Last Mileage
+            async with db.execute("SELECT date, value FROM mileage ORDER BY date DESC LIMIT 1") as cursor:
+                mileage = await cursor.fetchone()
+
+            # Last 3 Expenses
+            async with db.execute("SELECT date, category, amount FROM expenses ORDER BY date DESC LIMIT 3") as cursor:
+                expenses = await cursor.fetchall()
+
+        return {
+            "mood": mood,
+            "mileage": mileage,
+            "expenses": expenses
+        }
+
 db = DatabaseManager(DB_PATH)

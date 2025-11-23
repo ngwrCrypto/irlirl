@@ -287,6 +287,26 @@ class DatabaseManager:
             "mileage": mileage
         }
 
+    async def get_last_data(self):
+        async with aiosqlite.connect(self.db_path) as db:
+            # Last Mood
+            async with db.execute("SELECT date, value FROM mood ORDER BY date DESC LIMIT 1") as cursor:
+                mood = await cursor.fetchone()
+
+            # Last Mileage
+            async with db.execute("SELECT date, value FROM mileage ORDER BY date DESC LIMIT 1") as cursor:
+                mileage = await cursor.fetchone()
+
+            # Last 3 Expenses
+            async with db.execute("SELECT date, category, amount FROM expenses ORDER BY date DESC LIMIT 3") as cursor:
+                expenses = await cursor.fetchall()
+
+        return {
+            "mood": mood,
+            "mileage": mileage,
+            "expenses": expenses
+        }
+
 db = DatabaseManager(DB_PATH)
 ```
 
@@ -312,6 +332,28 @@ async def cmd_start(message: Message):
 async def show_last_data(message: Message):
     # Placeholder for simple last data check, or just a stub
     await message.answer("Функція ще в розробці, але скоро тут будуть твої останні записи!")
+
+@router.message(F.text == "Показати статистику за тиждень")
+async def show_weekly_stats(message: Message):
+    from db.manager import db
+    from datetime import date, timedelta
+
+    today = date.today()
+    start_of_week = today - timedelta(days=6)
+
+    stats = await db.get_weekly_stats(start_of_week.isoformat(), today.isoformat())
+
+    mood_percent = int(stats['avg_mood'] * 100) if stats['avg_mood'] is not None else 0
+
+    msg = (
+        "📊 **Тижневий звіт** (останні 7 днів):\n\n"
+        f"💸 Витрачено: {stats['expenses']:.2f} €\n"
+        f"💰 Зарплата: {stats['salary']:.2f} €\n"
+        f"📉 Залишок: {stats['salary'] - stats['expenses']:.2f} €\n"
+        f"😊 Середній настрій: {mood_percent}%\n"
+        f"🚗 Пробіг: {stats['mileage']:.1f} км"
+    )
+    await message.answer(msg, parse_mode="Markdown")
 ```
 
 # handlers/daily.py
@@ -409,6 +451,32 @@ async def process_amount(message: Message, state: FSMContext):
 
     except ValueError:
         await message.answer("Будь ласка, введи коректне число (більше 0).")
+
+# Salary Handlers
+from aiogram.types import CallbackQuery
+from utils.states import SalaryState
+
+@router.callback_query(F.data == "add_salary")
+async def start_salary(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(SalaryState.amount)
+    await callback.message.answer("Введи суму зарплати в €:")
+    await callback.answer()
+
+@router.message(SalaryState.amount)
+async def process_salary(message: Message, state: FSMContext):
+    try:
+        amount = float(message.text.replace(',', '.'))
+        if amount < 0:
+            raise ValueError("Negative amount")
+
+        today = date.today().isoformat()
+        await db.add_salary(today, amount)
+
+        await message.answer(f"🤑 Зарплата {amount}€ записана! Гуляємо! 🎉", reply_markup=main_menu())
+        await state.clear()
+
+    except ValueError:
+        await message.answer("Будь ласка, введи коректне число.")
 ```
 
 # jobs/scheduler.py
@@ -500,7 +568,8 @@ async def check_salary_reminder(bot: Bot):
     if today == 2: # Wednesday
         await bot.send_message(ADMIN_ID, "Завтра зарплата! Плани на фінанси? 💸")
     elif today == 4: # Friday
-        await bot.send_message(ADMIN_ID, "Скільки прийшло на карту? Введи суму в €.")
+        from utils.keyboards import salary_keyboard
+        await bot.send_message(ADMIN_ID, "Скільки прийшло на карту? Введи суму в €.", reply_markup=salary_keyboard())
         # Note: Logic to capture the answer would typically involve FSM or a specific handler.
 
 async def send_weekly_report(bot: Bot):
@@ -556,6 +625,12 @@ def mood_keyboard():
     kb = [
         [InlineKeyboardButton(text="Норм 😊", callback_data="mood_1")],
         [InlineKeyboardButton(text="Не дуже 😞", callback_data="mood_0")]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)
+
+def salary_keyboard():
+    kb = [
+        [InlineKeyboardButton(text="💰 Ввести зарплату", callback_data="add_salary")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
 ```

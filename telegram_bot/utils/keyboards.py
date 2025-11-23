@@ -21,3 +21,9 @@ def mood_keyboard():
         [InlineKeyboardButton(text="Не дуже 😞", callback_data="mood_0")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=kb)
+
+def salary_keyboard():
+    kb = [
+        [InlineKeyboardButton(text="💰 Ввести зарплату", callback_data="add_salary")]
+    ]
+    return InlineKeyboardMarkup(inline_keyboard=kb)

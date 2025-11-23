@@ -27,7 +27,8 @@ async def check_salary_reminder(bot: Bot):
     if today == 2: # Wednesday
         await bot.send_message(ADMIN_ID, "Завтра зарплата! Плани на фінанси? 💸")
     elif today == 4: # Friday
-        await bot.send_message(ADMIN_ID, "Скільки прийшло на карту? Введи суму в €.")
+        from utils.keyboards import salary_keyboard
+        await bot.send_message(ADMIN_ID, "Скільки прийшло на карту? Введи суму в €.", reply_markup=salary_keyboard())
         # Note: To handle the response, we might need to set a state here.
         # However, setting state from a job without a user message context is tricky in aiogram 3.
         # We can just ask the question. If the user replies with a number, we might need a handler
