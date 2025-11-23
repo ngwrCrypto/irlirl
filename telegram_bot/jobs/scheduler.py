@@ -1,7 +1,7 @@
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Bot
 from config import TIMEZONE
-from jobs.tasks import send_morning_checkin, check_salary_reminder, send_weekly_report
+from jobs.tasks import send_morning_checkin, check_salary_reminder, send_weekly_report, send_evening_forecast, send_hourly_rates
 
 def setup_scheduler(bot: Bot):
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
@@ -44,6 +44,14 @@ def setup_scheduler(bot: Bot):
         'cron',
         hour=20,
         minute=0,
+        kwargs={'bot': bot}
+    )
+
+    # Hourly Rates
+    scheduler.add_job(
+        send_hourly_rates,
+        'cron',
+        minute=0, # Every hour at minute 0
         kwargs={'bot': bot}
     )
 

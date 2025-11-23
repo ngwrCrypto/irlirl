@@ -62,3 +62,8 @@ async def send_evening_forecast(bot: Bot):
     from utils.weather import get_weather_forecast
     forecast_info = await get_weather_forecast()
     await bot.send_message(ADMIN_ID, forecast_info)
+
+async def send_hourly_rates(bot: Bot):
+    from utils.finance import get_exchange_rates
+    rates_info = await get_exchange_rates()
+    await bot.send_message(ADMIN_ID, rates_info)

@@ -20,6 +20,7 @@ telegram_bot/
 │   ├── scheduler.py
 │   └── tasks.py
 └── utils/
+    ├── finance.py
     ├── keyboards.py
     ├── states.py
     └── weather.py
@@ -138,7 +139,7 @@ import asyncio
 import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from config import BOT_TOKEN
+from config import BOT_TOKEN, ADMIN_ID
 from db.manager import db
 from handlers import common, expenses, daily
 from jobs.scheduler import setup_scheduler
@@ -155,6 +156,9 @@ async def main():
     # Initialize Bot and Dispatcher
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
+
+    # Send Startup Message
+    await bot.send_message(ADMIN_ID, "Бот запущено дороу! 🚀")
 
     # Register Routers
     dp.include_router(common.router)
@@ -413,7 +417,7 @@ async def process_amount(message: Message, state: FSMContext):
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Bot
 from config import TIMEZONE
-from jobs.tasks import send_morning_checkin, check_salary_reminder, send_weekly_report, send_evening_forecast
+from jobs.tasks import send_morning_checkin, check_salary_reminder, send_weekly_report, send_evening_forecast, send_hourly_rates
 
 def setup_scheduler(bot: Bot):
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
@@ -456,6 +460,14 @@ def setup_scheduler(bot: Bot):
         kwargs={'bot': bot}
     )
 
+    # Hourly Rates
+    scheduler.add_job(
+        send_hourly_rates,
+        'cron',
+        minute=0, # Every hour at minute 0
+        kwargs={'bot': bot}
+    )
+
     scheduler.start()
 ```
 
@@ -468,6 +480,7 @@ from utils.weather import get_weather
 from utils.keyboards import mood_keyboard
 from db.manager import db
 from datetime import date, timedelta
+from utils.finance import get_exchange_rates
 
 async def send_morning_checkin(bot: Bot):
     # 1. Mood
@@ -513,6 +526,10 @@ async def send_evening_forecast(bot: Bot):
     from utils.weather import get_weather_forecast
     forecast_info = await get_weather_forecast()
     await bot.send_message(ADMIN_ID, forecast_info)
+
+async def send_hourly_rates(bot: Bot):
+    rates_info = await get_exchange_rates()
+    await bot.send_message(ADMIN_ID, rates_info)
 ```
 
 # utils/keyboards.py
@@ -663,4 +680,48 @@ async def get_weather_forecast() -> str:
 
     except Exception as e:
         return f"Не вдалося отримати прогноз: {e}"
+
+```
+
+# utils/finance.py
+
+```python
+import httpx
+
+async def get_exchange_rates() -> str:
+    try:
+        async with httpx.AsyncClient() as client:
+            # 1. Fiat (NBU API for UAH)
+            # https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json
+            fiat_url = "https://bank.gov.ua/NBUStatService/v1/statdirectory/exchange?json"
+            fiat_resp = await client.get(fiat_url)
+            fiat_data = fiat_resp.json()
+
+            usd_uah = next((item['rate'] for item in fiat_data if item['cc'] == 'USD'), 0.0)
+            eur_uah = next((item['rate'] for item in fiat_data if item['cc'] == 'EUR'), 0.0)
+
+            # 2. Crypto (CoinGecko API)
+            # https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum&vs_currencies=usd
+            crypto_url = "https://api.coingecko.com/api/v3/simple/price"
+            crypto_params = {
+                "ids": "bitcoin,ethereum",
+                "vs_currencies": "usd"
+            }
+            crypto_resp = await client.get(crypto_url, params=crypto_params)
+            crypto_data = crypto_resp.json()
+
+            btc_usd = crypto_data.get('bitcoin', {}).get('usd', 0.0)
+            eth_usd = crypto_data.get('ethereum', {}).get('usd', 0.0)
+
+            return (
+                f"💰 Курс валют:\n"
+                f"🇺🇸 USD: {usd_uah:.2f} ₴\n"
+                f"🇪🇺 EUR: {eur_uah:.2f} ₴\n\n"
+                f"💎 Крипта:\n"
+                f"₿ BTC: {btc_usd:,.2f} $\n"
+                f"Ξ ETH: {eth_usd:,.2f} $"
+            )
+
+    except Exception as e:
+        return f"Помилка отримання курсів: {e}"
 ```
