@@ -38,4 +38,13 @@ def setup_scheduler(bot: Bot):
         kwargs={'bot': bot}
     )
 
+    # Evening Forecast (Daily 20:00)
+    scheduler.add_job(
+        send_evening_forecast,
+        'cron',
+        hour=20,
+        minute=0,
+        kwargs={'bot': bot}
+    )
+
     scheduler.start()

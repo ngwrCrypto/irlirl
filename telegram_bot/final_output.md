@@ -413,7 +413,7 @@ async def process_amount(message: Message, state: FSMContext):
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from aiogram import Bot
 from config import TIMEZONE
-from jobs.tasks import send_morning_checkin, check_salary_reminder, send_weekly_report
+from jobs.tasks import send_morning_checkin, check_salary_reminder, send_weekly_report, send_evening_forecast
 
 def setup_scheduler(bot: Bot):
     scheduler = AsyncIOScheduler(timezone=TIMEZONE)
@@ -442,6 +442,15 @@ def setup_scheduler(bot: Bot):
         send_weekly_report,
         'cron',
         day_of_week='sun',
+        hour=20,
+        minute=0,
+        kwargs={'bot': bot}
+    )
+
+    # Evening Forecast (Daily 20:00)
+    scheduler.add_job(
+        send_evening_forecast,
+        'cron',
         hour=20,
         minute=0,
         kwargs={'bot': bot}
@@ -499,6 +508,11 @@ async def send_weekly_report(bot: Bot):
     )
 
     await bot.send_message(ADMIN_ID, msg)
+
+async def send_evening_forecast(bot: Bot):
+    from utils.weather import get_weather_forecast
+    forecast_info = await get_weather_forecast()
+    await bot.send_message(ADMIN_ID, forecast_info)
 ```
 
 # utils/keyboards.py
@@ -599,4 +613,54 @@ async def get_weather() -> str:
 
     except Exception as e:
         return f"Не вдалося отримати погоду: {e}"
+
+async def get_weather_forecast() -> str:
+    url = "https://api.open-meteo.com/v1/forecast"
+    params = {
+        "latitude": LATITUDE,
+        "longitude": LONGITUDE,
+        "daily": "weather_code,temperature_2m_max,temperature_2m_min",
+        "timezone": "auto",
+        "forecast_days": 2
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            data = response.json()
+
+            daily = data.get("daily", {})
+            # Index 1 is tomorrow (0 is today)
+            code = daily.get("weather_code", [0, 0])[1]
+            temp_max = daily.get("temperature_2m_max", [0, 0])[1]
+            temp_min = daily.get("temperature_2m_min", [0, 0])[1]
+
+            # WMO Weather interpretation codes (simplified)
+            if code == 0:
+                emoji = "☀️"
+                desc = "Sunny"
+            elif code in [1, 2, 3]:
+                emoji = "☁️"
+                desc = "Cloudy"
+            elif code in [45, 48]:
+                emoji = "🌫️"
+                desc = "Foggy"
+            elif code in [51, 53, 55, 61, 63, 65, 80, 81, 82]:
+                emoji = "🌧️"
+                desc = "Rain"
+            elif code in [71, 73, 75, 77, 85, 86]:
+                emoji = "❄️"
+                desc = "Snow"
+            elif code in [95, 96, 99]:
+                emoji = "⛈️"
+                desc = "Storm"
+            else:
+                emoji = "🌡"
+                desc = "Normal"
+
+            return f"Прогноз на завтра: {desc} {emoji}, 🌡 {temp_min}°C ... {temp_max}°C"
+
+    except Exception as e:
+        return f"Не вдалося отримати прогноз: {e}"
 ```

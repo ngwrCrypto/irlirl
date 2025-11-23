@@ -57,3 +57,8 @@ async def send_weekly_report(bot: Bot):
     )
 
     await bot.send_message(ADMIN_ID, msg)
+
+async def send_evening_forecast(bot: Bot):
+    from utils.weather import get_weather_forecast
+    forecast_info = await get_weather_forecast()
+    await bot.send_message(ADMIN_ID, forecast_info)
