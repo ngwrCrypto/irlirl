@@ -37,8 +37,8 @@ nano .env
 Встав у файл `.env` свої дані:
 
 ```
-BOT_TOKEN=5639948834:AAHu_Od4nDPibpoH88UJLxMHPG17A5jcYrc
-ADMIN_ID=1643599458
+BOT_TOKEN=your_token_here
+ADMIN_ID=your_admin_id
 ```
 
 (Натисни `Ctrl+O`, `Enter` щоб зберегти, і `Ctrl+X` щоб вийти)
